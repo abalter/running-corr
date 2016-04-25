@@ -177,9 +177,9 @@ def getDepthCounts(data_filename):
                 read = int(values[i])
                 # if that depth exists for that column then increment. Else set to 1.
                 if read in depth_counts[i]:
-                    depth_counts[i][read] += 1  # increment the number of times that depth appeared
+                    depth_counts[i][read]['count'] += 1  # increment the number of times that depth appeared
                 else:
-                    depth_counts[i][read] = 1
+                    depth_counts[i][read]['count'] = 1
                 
                 # Track the maximum depth so that at the end can make a vector
                 # with max_depth elements to hold the count of each depth
@@ -192,8 +192,8 @@ def getDepthCounts(data_filename):
     # column is a hash containing depth counts for that column 
     for column in depth_counts:
         # depth becomes the row index of the array
-        for depth, count in column:
-            depths[depth] = count
+        for depth, data in column:
+            depths[column][depth] = data['count']
                 
     return depths
     
