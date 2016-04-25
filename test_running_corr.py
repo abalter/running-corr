@@ -4,60 +4,92 @@ import numpy as np
 import pprint
 
 MEANS_RANGE = 100
+COVARIANCES_RANGE = MEANS_RANGE**(3/2)
 
-def generateCorrelationMatrix(cols):
-    cov = np.random.uniform(-1, 1, size=(cols, cols))
-    corr_coeffs = np.zeros((cols, cols))
+pp = pprint.PrettyPrinter()
+
+def testRunningCorr(rows, cols):
+    
+    corr_coeffs, covariances, means = getCorrelationMatrix(cols)
+    writeTempFileOfRVs(rows, cols, means, covariances)
+    import corr_on_the_run as c
+    pcorr, pcov, means = c.pearsons("temp")
+    pcorr = np.matrix(pcorr)
+    print("actual")
+    pp.pprint(corr_coeffs.round(3))
+    print("read")
+    pp.pprint(pcorr.round(3))
+    print("difference")
+    pp.pprint((pcorr - corr_coeffs).round(3))
+    
+
+def getCorrelationMatrix(cols):
+    
+    # print("cols", cols)
+    
+    # Create a symmetric matrix with values
+    # uniformly distributed in [-1,1]
+
+    covariances = np.zeros((cols, cols))
+    corr_coeffs = np.ones((cols, cols))
+    A = np.random.uniform(-1, 1, size=(cols, cols))*COVARIANCES_RANGE
+    covariances = A.dot(A.T)
+    means = np.random.uniform(-1, 1, cols)*MEANS_RANGE
+    
     for i in range(cols):
         for j in range(cols):
-            corr_coeffs[i][j] = cov[i][j]/np.sqrt(cov[i][i]*cov[j][j])
-
-    pp = pprint.PrettyPrinter()
+            corr_coeffs[i][j] = covariances[i][j]/np.sqrt(covariances[i][i]*covariances[j][j])
+                                
+    print("means")
+    pp.pprint(means)
+    
+    print("covariances")
+    pp.pprint(covariances)
+    
     print("corr_coeffs")
     pp.pprint(corr_coeffs)
     
-    return corr_coeffs, cov
-    
+    return corr_coeffs, covariances, means
 
 def generateMeans(cols):
     
-    means = np.random.uniform(-1, 1, size(cols, 1))*MEANS_RANGE
+    means = np.random.uniform(-1, 1, cols)*MEANS_RANGE
     return means
     
 
-def getCorrelatedRandomNormals(cols):
-    corr_coeffs, cov = generateCorrelationMatrix(cols)
-    means = generateMeans(cols)
+def writeTempFileOfRVs(rows, cols, means, covariances):
     
-    correlated_normals = np.random.multivariate_normal(means, cov)
-    
-    return correlated_normals
-    
-
-def writeTempFileOfRVs(rows, cols):
-    
-    correlated_normals = getCorrelatedRandomNormals(cols)
     
     temp_file = open("temp", 'w')
     
     for i in range(rows):
+        correlated_normals = np.random.multivariate_normal(means, covariances)
         line = " ".join( [str(x) for x in correlated_normals] )
         temp_file.write(line)
+        temp_file.write("\n")
     
     temp_file.close()
     
 
 if __name__ == "__main__":
+    
+    print("__name__ == __main__")
 
     import sys
     
     args = sys.argv;
     
-    rows = args[1]
-    cols = args[2]
+    print(args)
+    
+    rows = int(args[1])
+    cols = int(args[2])
+    
+    print("rows", rows, "cols", cols)
     
     testRunningCorr(rows, cols)
-
+    
+else:
+    getCorrelationMatrix(5)
 
 # http://comisef.wikidot.com/tutorial:correlateduniformvariates
 # http://stackoverflow.com/questions/32718752/how-to-generate-correlated-uniform0-1-variables

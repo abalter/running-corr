@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 from math import sqrt
+import numpy as np
 
 def spearmans(data_filename):
     
@@ -62,12 +63,12 @@ def pearsons(data_filename):
     the correlation coefficient is calculated from the sums.
     """
     
-    E_, E_XY, N = \
+    S_X, S_XY, N = \
         collectRunningMoments(data_filename)
     
-    pcorr = calculatePearsons(E_, E_XY, N)
+    pcorr, pcov, means = calculatePearsons(S_X, S_XY, N)
     
-    return pcorr
+    return pcorr, pcov, means
 ### end pearsons
 
 
@@ -76,11 +77,11 @@ def pileup_corr(data_filename, max_depth):
     """spearmans, pearsons = pileup_correlations(data_filename)"""
     
     # Collect the intermediate data
-    ranks, E_, E_XY, N = \
+    ranks, S_X, S_XY, N = \
         collectRunningMoments(data_filename)
         
     # Calculate the correlation coefficients
-    pearsons = calculatePearsons(E_, E_XY, N)
+    pearsons = calculatePearsons(S_X, S_XY, N)
     spearmans = calculateSpearmans(ranks, N)
     
     # Write the correlation matrices to files
@@ -99,7 +100,7 @@ def pileup_corr(data_filename, max_depth):
 def collectRunningMoments(data_filename):
 
     """
-    ranks, E_, E_XY, N =  collectRunningMoments(data_filename)
+    ranks, S_X, S_XY, N =  collectRunningMoments(data_filename)
     
     Reads through the file line by line and collects the running sums
     and ranks which will be used to calculate the correlation coeeficients.
@@ -113,10 +114,10 @@ def collectRunningMoments(data_filename):
     num_columns = getNumColumns(data_filename)
 
     # initialize array of means
-    E_ = zeros(num_columns)
+    S_X = zeros(num_columns)
 
     # Initialize the 2D arrays for correlation coeeficients and moment products
-    pearsons = E_XY = zeros(num_columns, num_columns)
+    pearsons = S_XY = zeros(num_columns, num_columns)
             
     # initialize the values from a single line of the multipileup file
     values = zeros(num_columns)
@@ -133,25 +134,69 @@ def collectRunningMoments(data_filename):
             # See docstring for getNumColumns.
             
             # print("line " + line)
+            
+            # Split line and convert to numbers from strings
             values = [float(i) for i in line.split()]
-            if len(values) != num_columns:
+            if len(values) != num_columns: # some sort of problem
                 break
-            # Calculate moments. E_XX is on the diagonal of
-            # E_XY.
+            # Calculate moments. S_XX is on the diagonal of
+            # S_XY.
             for i in range(num_columns):
-                E_[i] += values[i]
+                S_X[i] += values[i] # sum the values for the means
+                # Sum the cross-products
                 for j in range(num_columns):
-                    E_XY[i][j] += values[i]*values[j]
+                    S_XY[i][j] += values[i]*values[j]
 
             # increment number of values for normalization 
             N += 1
         ### end for
     ### end with
             
-    return E_, E_XY, N
+    return S_X, S_XY, N
     
 ### end collectRunningMoments
 
+def getDepthCounts(data_filename):
+    
+    # get the number of sequences in the multipilup 
+    # in order to initialize the correlation matrices
+    num_columns = getNumColumns(data_filename)
+            
+    # initialize the values from a single line of the multipileup file
+    values = zeros(num_columns)
+
+    # initialize depth_counts with empty lists
+    depth_counts = [ {} for dummy in range(num_columns) ]
+    max_depth = 0
+    
+    with open(data_filename, 'r') as data_file:
+        for line in data_file: # read through data file line by line
+            
+            values = line.split() # split the depths in the line on whitespace]
+            for i in range(values.length):
+                read = int(values[i])
+                # if that depth exists for that column then increment. Else set to 1.
+                if read in depth_counts[i]:
+                    depth_counts[i][read] += 1  # increment the number of times that depth appeared
+                else:
+                    depth_counts[i][read] = 1
+                
+                # Track the maximum depth so that at the end can make a vector
+                # with max_depth elements to hold the count of each depth
+                max_depth = max(max_depth, max(values)) 
+                
+    
+    # translate from an array of hashes to an array of arrays
+    depths = np.zeros((max_depth, num_columns))
+    
+    # column is a hash containing depth counts for that column 
+    for column in depth_counts:
+        # depth becomes the row index of the array
+        for depth, count in column:
+            depths[depth] = count
+                
+    return depths
+    
 
 def collectRunningRanks(data_filename):
 
@@ -185,7 +230,7 @@ d
     values = zeros(num_columns)
 
     # initialize depth_counts with empty lists
-    depth_counts = [ [] for dummy in range(num_columns) ]
+    depth_counts = [ {} for dummy in range(num_columns) ]
     max_depth = 0
 
     # pileup_file = open(data_filename, 'r')
@@ -203,15 +248,14 @@ d
         ### end for
     ### end with
             
-    return ranks, E_, E_XY, N
-
-### end collectRunningMoments
+    return ranks, S_X, S_XY, N
 
 
-def updatePearsonsMoments(values, E_, E_XY):
+
+def updatePearsonsMoments(values, S_X, S_XY):
 
     """
-    E_, X_XY = updatePearsonsMoments(values, E_, E_XY)
+    S_X, X_XY = updatePearsonsMoments(values, S_X, S_XY)
 
     Updates the running sums of the means and cross-products by 
     adding the values from the current line.
@@ -224,37 +268,51 @@ def updatePearsonsMoments(values, E_, E_XY):
     num_columns = len(values)
 
     for i in range(num_columns):
-        E_[i] += values[i]
+        S_X[i] += values[i]
         for j in range(num_columns):
-            E_XY[i][j] += values[i]*values[j]
+            S_XY[i][j] += values[i]*values[j]
         ### end j
     ### end i
 
-    return E_, E_XY
-
-### end updatePearsonsMoments
+    return S_X, S_XY
 
 
-def calculatePearsons(E_, E_XY, N):
+
+def calculatePearsons(S_X, S_XY, N):
     """
-    pearsons = calculatePearsons(E_, E_XY)
+    pearsons = calculatePearsons(S_X, S_XY)
 
-    E_      : 1xM sum of values
-    E_XY    : MxM sum of products
+    S_X      : 1xM sum of values
+    S_XY    : MxM sum of products
     N       : Number of values
     """  
 
-    num_columns = len(E_)
-    cov = zeros(num_columns, num_columns)
-
+    num_columns = len(S_X)
+    E_X = np.matrix(S_X)/N # \mu_\alpha = \frac{1}{N}\sum_{i = 0...N} x_{i,\alpha}
+    print("shape E_X " + str(E_X.shape))
+    EE_X = E_X.T.dot(E_X)
+    print("shape EE_X " + str(EE_X.shape))
+    E_XY = np.matrix(S_XY)/N - E_X.T.dot(E_X) # \sigma{\alpha\beta} = \frac{1}{n}\sum_{i = 1...N}(x_{i,\alpha}x_{i,\beta} - \mu_\alpha}\mu_\beta)
+    print("shape E_XY " + str(E_XY.shape))
+    print("E_XY")
+    print(E_XY.round(3))
+    
+    C_XY = np.matrix(np.zeros((num_columns, num_columns)))
+    print("shape C_XY " + str(C_XY.shape))
+    
+    
     for i in range(num_columns):
         for j in range(num_columns):
-            cov[i][j] = \
-                (N*E_XY[i][j] - E_[i]*E_[j])/sqrt(N*E_XY[i][i] - E_[i]*E_[i])/sqrt(N*E_XY[j][j] - E_[j]*E_[j])
-            #corr_coeff[i][j] = sqrt(cov[i][j])
+            print(E_XY[i,j]/np.sqrt(E_XY[i,i]*E_XY[j,j]))
+            C_XY[i,j] = E_XY[i,j]/np.sqrt(E_XY[i,i]*E_XY[j,j])
+            print("cij {} eii {} ejj {}".format(C_XY[i,j], E_XY[i,i], E_XY[j,j]))
         ### end j
     ### end i
-    return cov
+        
+    print("C_XY")
+    print(C_XY)
+    
+    return C_XY, E_XY, E_X
 
 ### end calculateSpearmans
 
@@ -424,7 +482,7 @@ if __name__ == "__main__":
     # print("args: " + ", ".join(args))
 
     if len(args) == 1:
-        num_columns = len(values)
+        #num_columns = len(values)
         print("ERROR: No arguments given.")
         print("Usage: corr_on_the_run corrtype input_file output_file")
         print("corrtype must be \"spearmans\" or \"pearsons\"")
