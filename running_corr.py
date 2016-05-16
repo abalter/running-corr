@@ -5,11 +5,16 @@ import numpy as np
 
 def spearmans(data_filename):
     
-    ranks, N = collectRunningRanks(data_filename)
+    depths_counts_ranks = getDepthsAndRanks(data_filename)
     
-    scorr = calculateSpearmans(ranks, N)
+    writeTempRankFile(data_filename, depths_counts_ranks)
     
-    return scorr
+    S_X, S_XY, N = \
+        collectRunningMoments("temp_rank_file")
+    
+    pcorr, pcov, means = calculatePearsons(S_X, S_XY, N)
+    
+    return pcorr, pcov, means
 ### end spearmans
 
 
@@ -156,46 +161,152 @@ def collectRunningMoments(data_filename):
     
 ### end collectRunningMoments
 
-def getDepthCounts(data_filename):
+def getDepthsAndRanks(data_filename):
     
     # get the number of sequences in the multipilup 
     # in order to initialize the correlation matrices
     num_columns = getNumColumns(data_filename)
             
     # initialize the values from a single line of the multipileup file
-    values = zeros(num_columns)
+    values = np.zeros(shape=(num_columns,1))
 
     # initialize depth_counts with empty lists
-    depth_counts = [ {} for dummy in range(num_columns) ]
+    depth_counts = [{} for dummy in range(num_columns)]
     max_depth = 0
     
+    ### Read in the data
+    
+    # Read through the file and create a dictionary of reads.
+    # Each column is a dictionary with keys that are the integer values
+    # of reads, and the values are dictionaries with keys 'count' and 'rank'
     with open(data_filename, 'r') as data_file:
         for line in data_file: # read through data file line by line
             
-            values = line.split() # split the depths in the line on whitespace]
-            for i in range(values.length):
+            values = line.split(",") # split the depths in the line on whitespace]
+            #print("len(values)", len(values))
+            #print("len(depth_counts", len(depth_counts))
+            for i in range(len(values)):
                 read = int(values[i])
+                #print(i, "read", read)
                 # if that depth exists for that column then increment. Else set to 1.
                 if read in depth_counts[i]:
+                    #print("depth exits, incrementing")
                     depth_counts[i][read]['count'] += 1  # increment the number of times that depth appeared
+                    #print(depth_counts[i][read])
+                    #print
                 else:
-                    depth_counts[i][read]['count'] = 1
+                    #print("depth doesn't exist, initializing")
+                    depth_counts[i][read] = {'count':1, 'rank':0}
+                    #print
                 
                 # Track the maximum depth so that at the end can make a vector
                 # with max_depth elements to hold the count of each depth
                 max_depth = max(max_depth, max(values)) 
                 
+    ### Calculate the ranks
     
-    # translate from an array of hashes to an array of arrays
-    depths = np.zeros((max_depth, num_columns))
+    # Fill in the 'rank' attribute of each read object.
+    # For each column:
+    #    1) Create an array of dictionaries with keys 'depth', 'count' and 'rank'
+    #       that are populated from the column. Called 'ranked_depths'
+    #    2) Sort the array on depths in ascending order
+    #    3) Loop through sorted ranked_depths and assign consecutive ranks
+    #       according to the fractional method that assigns ranks for tied
+    #       counts equal to the average of their ordinal ranks.
+    #    4) Finally, using the ranked_depths table, update the 'rank' field
+    #       of the depth_count objects.
     
-    # column is a hash containing depth counts for that column 
+    print("depth counts")
+    pp.pprint(depth_counts)
+    raw_input("")
+    
     for column in depth_counts:
-        # depth becomes the row index of the array
-        for depth, data in column:
-            depths[column][depth] = data['count']
+        # Create a list of objects that have depth, count, rank for that depth.
+        depths_counts_ranks = [{'depth':key, 'count':val['count'], 'rank':0} for key, val in column.iteritems()]
+        # Sort the list by depth
+        depths_counts_ranks.sort(key=lambda x: x['depth'])
+        print("sorted depths_counts_ranks no ranks")
+        pp.pprint(depths_counts_ranks)
+        
+        # Calculate the ranks using the fractional method for ties
+        count = 0
+        current_rank = 1
+        for i in range(len(depths_counts_ranks)):
+        #for item in depths_counts_ranks:
+            item = depths_counts_ranks[i]
+            #print("item[rank]", item['rank'])
+            count = item['count']
+            #print("count", count, "next_rank", current_rank)
+            
+            if count == 0:
+                break
+            elif count == 1:
+                item['rank'] = current_rank
+            else:
+                tied_rank = calculateTiedRank(current_rank, count)
+                #print("tied_rank", tied_rank)
+                item['rank'] = tied_rank
                 
-    return depths
+            depths_counts_ranks[i] = item
+            
+            current_rank += count
+            
+            #print("ending current_rank", current_rank)
+            #print("item", item)
+            
+        #print("column")
+        #pp.pprint(column)
+        
+        print("depths_counts_ranks with ranks")
+        pp.pprint(depths_counts_ranks)
+        
+        #print("ranked_depths.shape")
+        #print(len(depths_counts_ranks))
+        
+        print("filling depth_counts array for current column")
+        print("column")
+        pp.pprint(column)
+        for item in depths_counts_ranks:
+            print("item")
+            pp.pprint(item)
+            column[item['depth']]['rank'] = item['rank']
+            
+    print("depth_counts")
+    pp.pprint(depth_counts)
+    
+    
+    return depth_counts
+    
+
+def writeTempRankFile(data_filename, depths_counts_ranks):
+    print("writing temp rank file")
+    print("depths_counts_ranks")
+    pp.pprint(depths_counts_ranks)
+    raw_input("")
+    
+    #temp_read_file = opent(data_filename, "r")
+    temp_rank_file = open("temp_rank_file", "w")
+    with open(data_filename, 'r') as data_file:
+        for line in data_file: # read through data file line by line
+            array_of_ranks = []
+            print("line")
+            print(line)
+            # Put the line of reads into an array
+            reads = line.split(",")
+            int_reads = [int(read) for read in reads]
+            print("int_reads")
+            pp.pprint(int_reads)
+            for i in range(len(int_reads)):
+                rank = depths_counts_ranks[i][int_reads[i]]['rank']
+                array_of_ranks.append(str(rank))
+            print("array of ranks")
+            pp.pprint(array_of_ranks)
+            line_of_ranks = ",".join(array_of_ranks)
+            print("line of ranks")
+            print(line_of_ranks)
+            # Write a line of ranks
+            temp_rank_file.write(line_of_ranks + "\n")
+            
     
 
 def collectRunningRanks(data_filename):
@@ -203,7 +314,7 @@ def collectRunningRanks(data_filename):
 
     """
     ranks, N =  collectRunningRanks(data_filename)
-d
+
     Reads through the file line by line and collects the ranks
     which will be used to calculate the correlation coeeficients.
 
@@ -252,10 +363,10 @@ d
 
 
 
-def updatePearsonsMoments(values, S_X, S_XY):
+def updateMoments(values, S_X, S_XY):
 
     """
-    S_X, X_XY = updatePearsonsMoments(values, S_X, S_XY)
+    S_X, X_XY = updateMoments(values, S_X, S_XY)
 
     Updates the running sums of the means and cross-products by 
     adding the values from the current line.
@@ -324,35 +435,6 @@ def calculateSpearmans(ranks, N):
 ### end calculatePearsons
 
 
-def updateDepthCounts(values, depth_counts):
-
-    num_columns = len(values)
-    # max_depth = max( [ max(depth_counts[i]) for i in range(num_columns) ] )
-
-    # manage static max depth
-    # first test if it exists
-    try: test = updateDepthCounts.max_depth
-    # if not, initialize to 0
-    except AttributeError:  updateDepthCounts.max_depth = 0
-
-    for i in range(num_columns):
-        
-        current_depth = values[i]
-        
-        if current_depth > updateDepthCounts.max_depth:
-            # extend depth_counts[j] up to max_length for each j
-            for i in range(num_columns): 
-                depth_counts[i] += zeros(current_depth - updateDepthCounts.max_depth)
-                
-                # increment depth count
-                depth_counts[i][current_depth] += 1
-                
-                # update max depth static variable
-                updateDepthCounts.max_depth = current_depth
-
-### end updateDepthCounts
-
-
 def calculateRanks(values, ranks):
 
     """
@@ -367,22 +449,24 @@ def calculateRanks(values, ranks):
     ### end updateRanks
 
 
-def calculateTiedRank(current_rank, depth):
+def calculateTiedRank(current_rank, count):
 
     """
-
-    sum 1...N = N*(N-1)/2
-    sum N...M = M(M-1)/2 - (N-1)*(N-2)/2
-
+    sum 1...N = N*(N+1)/2
+    sum N...M = M(M+1)/2 - N*(N+1)/2
+    
+    tied_rank = average of sum current_rank...(current_rank + count - 1)
+              = average of sum 1...(current_rank + count - 1) - sum 1...(current_rank - 1)
+              = average of sum 1...(current_rank - 1 + count) - sum 1...(current_rank - 1)
     """
 
-    N = current_rank + 1
-    M = N + depth
-    sum_of_raw_ranks = M*(M-1)/2 - (N-1)*(N-2)/2
-    average_rank = sum_of_raw_ranks/depth
+    N = current_rank - 1
+    M = N + count
+    #print("current rank", current_rank, "count", count)
+    #print("N", N, "M", M)
+    sum_of_raw_ranks = M*(M+1)/2.0 - N*(N+1)/2.0
+    average_rank = sum_of_raw_ranks*1.0/count
     return average_rank
-
-### end calculateTiedRank
 
 
 def zeros(N, M=0):
@@ -438,41 +522,6 @@ def  writeCorrelationFile(correlation_file_name, corr):
         output_file.close()
             
 
-### end writeCorrelationFile
-
-
-
-#~ for line in file of values at each position
-#~ {
-#~ value = parse out the depth;
-#~ values[depth]++;
-#~ }
-
-#~ current_rank = 0;
-#~ for (i = 0; i<values.length ; i++)
-#~ {
-#~ current_depth = values[i];
-#~ if (current_depth == 0)
-#~ {   
-    #~ new_rank = current_rank;
-#~ }
-#~ else if (current_depth == 1)
-#~ {
-    #~ new_rank = floor(current_rank) + 1;
-#~ }
-#~ else
-#~ {
-    #~ // number of values with next highest rank = depth
-    #~ // so their ordinal ranks are current_rank + 1 ...current_rank + 1 + depth
-    #~ // the usual method is to assign them all a rank of their average 
-    #~ // ordinal rank. In other words, the sum of their ranks/depth
-    
-    #~ new_rank = calculateTiedRank(current_rank, depth);
-#~ }
-
-#~ ranks[current_depth] = new_rank;
-#~ }
-
 
 if __name__ == "__main__":
     import sys
@@ -519,10 +568,7 @@ if __name__ == "__main__":
             print("ERROR: corrtype must be \"spearmans\" or \"pearsons\"")
             print("Usage: corr_on_the_run corrtype input_file output_file")
             sys.exit()
-            
-        ##### end while
-        
-    ## end if
+
 
     if len(args) >= 4:
         output_file = args[3]

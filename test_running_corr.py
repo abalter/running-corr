@@ -2,6 +2,8 @@
 
 import numpy as np
 import pprint
+import running_corr as c
+
 
 MEANS_RANGE = 100
 COVARIANCES_RANGE = MEANS_RANGE**(3/2)
@@ -12,16 +14,22 @@ def testRunningCorr(rows, cols):
     
     corr_coeffs, covariances, means = getCorrelationMatrix(cols)
     writeTempFileOfRVs(rows, cols, means, covariances)
-    import corr_on_the_run as c
     pcorr, pcov, means = c.pearsons("temp")
     pcorr = np.matrix(pcorr)
     print("actual")
     pp.pprint(corr_coeffs.round(3))
     print("read")
     pp.pprint(pcorr.round(3))
+    
+    difference = pcorr - corr_coeffs
     print("difference")
     pp.pprint((pcorr - corr_coeffs).round(3))
     
+    mean_square_test = 0
+    
+    test = difference*difference/rows**2
+    
+    print("mean square test: ", mean_square_test)
 
 def getCorrelationMatrix(cols):
     
