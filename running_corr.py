@@ -400,23 +400,23 @@ def calculatePearsons(S_X, S_XY, N):
 
     num_columns = len(S_X)
     E_X = np.matrix(S_X)/N # \mu_\alpha = \frac{1}{N}\sum_{i = 0...N} x_{i,\alpha}
-    print("shape E_X " + str(E_X.shape))
+    #print("shape E_X " + str(E_X.shape))
     EE_X = E_X.T.dot(E_X)
-    print("shape EE_X " + str(EE_X.shape))
+    #print("shape EE_X " + str(EE_X.shape))
     E_XY = np.matrix(S_XY)/N - E_X.T.dot(E_X) # \sigma{\alpha\beta} = \frac{1}{n}\sum_{i = 1...N}(x_{i,\alpha}x_{i,\beta} - \mu_\alpha}\mu_\beta)
-    print("shape E_XY " + str(E_XY.shape))
-    print("E_XY")
-    print(E_XY.round(3))
+    #print("shape E_XY " + str(E_XY.shape))
+    #print("E_XY")
+    #print(E_XY.round(3))
     
     C_XY = np.matrix(np.zeros((num_columns, num_columns)))
-    print("shape C_XY " + str(C_XY.shape))
+    #print("shape C_XY " + str(C_XY.shape))
     
     
     for i in range(num_columns):
         for j in range(num_columns):
-            print(E_XY[i,j]/np.sqrt(E_XY[i,i]*E_XY[j,j]))
+            #print(E_XY[i,j]/np.sqrt(E_XY[i,i]*E_XY[j,j]))
             C_XY[i,j] = E_XY[i,j]/np.sqrt(E_XY[i,i]*E_XY[j,j])
-            print("cij {} eii {} ejj {}".format(C_XY[i,j], E_XY[i,i], E_XY[j,j]))
+            #print("cij {} eii {} ejj {}".format(C_XY[i,j], E_XY[i,i], E_XY[j,j]))
         ### end j
     ### end i
         
