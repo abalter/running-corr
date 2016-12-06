@@ -14,7 +14,7 @@ def testRunningCorr(rows, cols):
     
     corr_coeffs, covariances, means = getCorrelationMatrix(cols)
     writeTempFileOfRVs(rows, cols, means, covariances)
-    pcorr, pcov, means = c.pearsons("temp")
+    pcorr, pcov, means = c.pearsons("temp.txt")
     pcorr = np.matrix(pcorr)
     print("actual")
     pp.pprint(corr_coeffs.round(3))
@@ -30,6 +30,7 @@ def testRunningCorr(rows, cols):
     test = difference*difference/rows**2
     
     print("mean square test: ", mean_square_test)
+    
 
 def getCorrelationMatrix(cols):
     
@@ -58,6 +59,7 @@ def getCorrelationMatrix(cols):
     pp.pprint(corr_coeffs)
     
     return corr_coeffs, covariances, means
+    
 
 def generateMeans(cols):
     
@@ -68,7 +70,7 @@ def generateMeans(cols):
 def writeTempFileOfRVs(rows, cols, means, covariances):
     
     
-    temp_file = open("temp", 'w')
+    temp_file = open("temp.txt", 'w')
     
     for i in range(rows):
         correlated_normals = np.random.multivariate_normal(means, covariances)
